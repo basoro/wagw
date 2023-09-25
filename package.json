@@ -1,0 +1,26 @@
+{
+  "name": "mLITEWAGW",
+  "version": "1.0 Beta",
+  "description": "mLITE WA Gateway Multi device",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "mLITE",
+    "WA",
+    "WAMD"
+  ],
+  "author": "Basoro",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.3.0",
+    "axios": "^0.26.1",
+    "express": "^4.17.3",
+    "express-validator": "^6.14.0",
+    "moment": "^2.29.2",
+    "pino": "^8.15.0",
+    "qrcode": "^1.5.0",
+    "socket.io": "^4.4.1"
+  }
+}
