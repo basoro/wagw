@@ -19,28 +19,48 @@ Project ini adalah WhatsApp Gateway API berbasis Node.js menggunakan library `@w
 
 ## Instalasi
 
+### Cara Manual (Node.js)
+
 1.  Pastikan Node.js sudah terinstal.
 2.  Clone repository ini.
 3.  Install dependencies:
     ```bash
     npm install
     ```
+4.  Buat file `.env` (opsional, jika tidak ada akan menggunakan default):
+    ```env
+    PORT=10000
+    DEFAULT_API_KEY=wagw-secret-key
+    ```
+5.  Jalankan server:
+    ```bash
+    node app.js
+    ```
+6. Atau jika ingin berjalan di background (gunakan process manager seperti pm2):
+    ```bash
+    pm2 start app.js --name wagw
+    ```
 
-## Konfigurasi Port
+### Cara Menggunakan Docker
 
-Port server ditentukan dalam file `port.pl`. Defaultnya adalah `10000`. Ubah file tersebut jika ingin menggunakan port lain.
+1.  Build image:
+    ```bash
+    docker build -t wagw .
+    ```
+2.  Jalankan container (mapping port 10000):
+    ```bash
+    docker run -d -p 10000:10000 --name wagw-container -v $(pwd)/sessions:/usr/src/app/sessions -v $(pwd)/.env:/usr/src/app/.env wagw
+    ```
+    *Note: Volume `-v` digunakan agar sesi login tidak hilang saat container di-restart dan konfigurasi .env terbaca.*
 
-## Cara Menjalankan
+## Konfigurasi
 
-Jalankan perintah berikut di terminal:
+Konfigurasi server dilakukan melalui file `.env`.
 
-```bash
-node app.js
-```
-Atau jika ingin berjalan di background (gunakan process manager seperti pm2):
-```bash
-pm2 start app.js --name wagw
-```
+| Variable | Default | Deskripsi |
+| :--- | :--- | :--- |
+| `PORT` | `10000` | Port aplikasi berjalan |
+| `DEFAULT_API_KEY` | `wagw-secret-key` | API Key default yang dibuat saat inisialisasi database |
 
 ## Keamanan API (API Key)
 
@@ -50,14 +70,14 @@ Anda harus menyertakan API Key di **Header** atau **Query Parameter** pada setia
 *   **Header**: `x-api-key: [API_KEY_ANDA]`
 *   **Query Parameter**: `?api_key=[API_KEY_ANDA]`
 
-**API Key Default**: `wagw-secret-key`
+**API Key Default**: Lihat konfigurasi `DEFAULT_API_KEY` di `.env` (default: `wagw-secret-key`)
 
 > **PENTING**: API Key ini disimpan di database SQLite (`wagw.db`) dalam tabel `api_keys`. Anda disarankan untuk mengubahnya atau menambahkan key baru langsung melalui database.
 
 ## Cara Menggunakan
 
 ### 1. Manajemen Perangkat (Login, List, Logout, Delete)
-Akses `http://localhost:10000/` di browser.
+Akses `http://localhost:10000/` (sesuaikan port) di browser.
 
 *   **Tambah Perangkat**: Masukkan Device ID unik, klik "Generate QR Code", lalu scan.
 *   **Lihat Daftar Perangkat**: Masukkan API Key di bagian "Registered Devices" lalu klik "Refresh List".

@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+require('dotenv').config();
 
 const dbPath = path.resolve(__dirname, 'wagw.db');
 
@@ -37,7 +38,7 @@ function createTables() {
             db.get("SELECT count(*) as count FROM api_keys", [], (err, row) => {
                 if (err) return console.error(err.message);
                 if (row.count === 0) {
-                    const defaultKey = 'wagw-secret-key'; // Default key for initial setup
+                    const defaultKey = process.env.DEFAULT_API_KEY || 'wagw-secret-key'; 
                     createApiKey(defaultKey, 'Default API Key');
                     console.log(`Default API Key created: ${defaultKey}`);
                 }

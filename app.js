@@ -1,3 +1,4 @@
+
 const { startCon, init } = require('./connection')
 const http = require('http');
 const express = require('express');
@@ -8,6 +9,7 @@ const { Server } = require('socket.io');
 const io = new Server(server);
 const fs = require('fs');
 const marked = require('marked');
+require('dotenv').config();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true, limit: '50mb', parameterLimit: 1000000 }))
@@ -70,15 +72,10 @@ io.on('connection', (socket) => {
         return
     })
 })
-fs.readFile('./port.pl', 'utf8', (err, data) => {
-  if (err) {
-    console.error(err);
-    return;
-  } else {
-    var port = data.split('\n').shift();
-    server.listen(port, () => {
-        console.log(`Server running on port ${port}`);
-        init();
-    })
-  }
+
+const PORT = process.env.PORT || 10000;
+
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    init();
 });

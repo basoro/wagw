@@ -16,6 +16,7 @@
   "dependencies": {
     "@whiskeysockets/baileys": "^6.3.0",
     "axios": "^0.26.1",
+    "dotenv": "^17.3.1",
     "express": "^4.17.3",
     "express-validator": "^6.14.0",
     "marked": "^17.0.3",
