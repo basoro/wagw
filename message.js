@@ -28,7 +28,7 @@ const sendMessage = async (req, res) => {
     if (checkValidation.status === false) return res.status(410).json({ status: false, msg: checkValidation.msg })
     const { conn } = checkValidation.data
 
-    const type = req.body.type;
+    const type = req.body.type || 'text';
     const msg = await getMessage(type, req.body)
     
     try {

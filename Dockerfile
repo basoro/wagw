@@ -1,7 +1,8 @@
-FROM node:18-slim
+FROM node:24-slim
 
 # Install dependencies required for canvas/qrcode
 RUN apt-get update && apt-get install -y \
+    git \
     build-essential \
     libcairo2-dev \
     libpango1.0-dev \

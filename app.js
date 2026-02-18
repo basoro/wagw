@@ -9,6 +9,8 @@ const { Server } = require('socket.io');
 const io = new Server(server);
 const fs = require('fs');
 const marked = require('marked');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger');
 require('dotenv').config();
 
 app.use(express.json());
@@ -58,6 +60,8 @@ app.get('/docs', (req, res) => {
         `);
     });
 });
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(router);
 require('./routes')(router)

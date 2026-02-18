@@ -28,28 +28,177 @@ module.exports = function (router) {
 
     router.use('/wagateway/*', authenticate);
 
+    /**
+     * @swagger
+     * /wagateway/kirimpesan:
+     *   post:
+     *     summary: Send a text message
+     *     tags: [Messages]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - sender
+     *               - number
+     *               - message
+     *             properties:
+     *               sender:
+     *                 type: string
+     *                 description: Device ID to send from
+     *               number:
+     *                 type: string
+     *                 description: Recipient phone number (e.g., 628123456789)
+     *               message:
+     *                 type: string
+     *                 description: Message content
+     *     responses:
+     *       200:
+     *         description: Message sent successfully
+     *       410:
+     *         description: Failed to send message
+     */
     router.post('/wagateway/kirimpesan', [
         body('sender', 'Wrong Parameters!').notEmpty(),
         body('number', 'Wrong Parameters!').notEmpty(),
         body('message', 'Wrong Parameters!').notEmpty()
     ], sendMessage)
+
+    /**
+     * @swagger
+     * /wagateway/kirimgambar:
+     *   post:
+     *     summary: Send an image message
+     *     tags: [Messages]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - sender
+     *               - number
+     *               - message
+     *               - url
+     *             properties:
+     *               sender:
+     *                 type: string
+     *               number:
+     *                 type: string
+     *               message:
+     *                 type: string
+     *                 description: Image caption
+     *               url:
+     *                 type: string
+     *                 description: Image URL
+     *     responses:
+     *       200:
+     *         description: Image sent successfully
+     */
     router.post('/wagateway/kirimgambar', [
         body('sender', 'Wrong Parameters!').notEmpty(),
         body('number', 'Wrong Parameters!').notEmpty(),
         body('message', 'Wrong Parameters!').notEmpty(),
         body('url', 'Wrong Parameters!').notEmpty(),
     ], sendMessage)
+
+    /**
+     * @swagger
+     * /wagateway/kirimfile:
+     *   post:
+     *     summary: Send a document/file
+     *     tags: [Messages]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - sender
+     *               - number
+     *               - url
+     *             properties:
+     *               sender:
+     *                 type: string
+     *               number:
+     *                 type: string
+     *               url:
+     *                 type: string
+     *                 description: File URL
+     *     responses:
+     *       200:
+     *         description: File sent successfully
+     */
     router.post('/wagateway/kirimfile', [
         body('sender', 'Wrong Parameters!').notEmpty(),
         body('number', 'Wrong Parameters!').notEmpty(),
         body('url', 'Wrong Parameters!').notEmpty(),
     ], sendMessage)
 
+    /**
+     * @swagger
+     * /wagateway/blast:
+     *   post:
+     *     summary: Send bulk messages (Blast)
+     *     tags: [Bulk]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - numbers
+     *               - messages
+     *             properties:
+     *               numbers:
+     *                 type: array
+     *                 items:
+     *                   type: string
+     *               messages:
+     *                 type: array
+     *                 items:
+     *                   type: string
+     *               type:
+     *                 type: string
+     *                 enum: [text, image, document]
+     *                 default: text
+     *               url:
+     *                 type: string
+     *                 description: Required if type is image/document
+     *     responses:
+     *       200:
+     *         description: Bulk process started
+     */
     router.post('/wagateway/blast', [
         body('numbers', 'Wrong Parameters!').isArray(),
         body('messages', 'Wrong Parameters!').isArray(),
     ], sendBulkMessage)
 
+    /**
+     * @swagger
+     * /wagateway/logs:
+     *   get:
+     *     summary: Get message logs
+     *     tags: [Logs]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     responses:
+     *       200:
+     *         description: List of message logs
+     */
     router.get('/wagateway/logs', (req, res) => {
         getLogs(100, (err, rows) => {
              if (err) {
@@ -60,6 +209,18 @@ module.exports = function (router) {
         });
     });
 
+    /**
+     * @swagger
+     * /wagateway/devices:
+     *   get:
+     *     summary: Get registered devices
+     *     tags: [Devices]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     responses:
+     *       200:
+     *         description: List of devices and their status
+     */
     router.get('/wagateway/devices', (req, res) => {
         const connectedDevices = [];
         
@@ -87,6 +248,29 @@ module.exports = function (router) {
         });
     });
 
+    /**
+     * @swagger
+     * /wagateway/delete-device:
+     *   post:
+     *     summary: Delete a device
+     *     tags: [Devices]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - device_id
+     *             properties:
+     *               device_id:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: Device deleted successfully
+     */
     router.post('/wagateway/delete-device', [
         body('device_id', 'Wrong Parameters!').notEmpty(),
     ], async (req, res) => {
