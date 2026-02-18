@@ -1,20 +1,23 @@
 
 const { validationResult } = require('express-validator');
-const { startCon } = require('./connection')
+const { getSession, sessions } = require('./connection')
+const { logMessage } = require('./database');
 const fs = require('fs');
 //const { getFileTypeFromUrl, formatReceipt } = require('./Helper')
 const { Socket } = require('socket.io');
+
 const validationSend = async (req) => {
 
     const errors = validationResult(req);
     //console.log(req);
     if (!errors.isEmpty()) return { status: false, msg: errors.array()[0].msg };
-    const check = await fs.readFileSync(`./session-${req.body.sender}.json/creds.json`);
-    if (!check) return { status: false, msg: 'The sender is not registered or not scan yet!' }
+    
+    const sender = req.body.sender;
+    const conn = getSession(sender);
+    
+    if (!conn) return { status: false, msg: 'The sender is not registered or not scan yet!' }
 
-    const { conn, state } = await startCon(req.body.sender)
-
-    return { status: true, data: { conn, state } }
+    return { status: true, data: { conn } }
 }
 
 const sendMessage = async (req, res) => {
@@ -23,32 +26,91 @@ const sendMessage = async (req, res) => {
 
     const receipt = formatReceipt(req.body.number);
     if (checkValidation.status === false) return res.status(410).json({ status: false, msg: checkValidation.msg })
-    const { conn, state } = checkValidation.data
+    const { conn } = checkValidation.data
 
     const type = req.body.type;
     const msg = await getMessage(type, req.body)
-    conn.ev.on('connection.update', async (update) => {
-        if (update.connection === 'open') {
+    
+    try {
+        const check = await conn.onWhatsApp(receipt);
+        if (check.length === 0) return res.status(410).json({ status: false, msg: 'The Destination Number Is Not Registered On Whatsapp' });
+        await conn.sendMessage(receipt, msg).then(() => {
+            logMessage(req.body.sender, receipt, JSON.stringify(msg), 'success');
+            res.status(200).json({ status: true, msg: 'Message Sent!' })
+        }).catch((e) => {
+            logMessage(req.body.sender, receipt, JSON.stringify(msg), 'failed: ' + e.message);
+            res.status(410).json({ status: false, msg: e.message })
+        })
+    } catch (e) {
+         res.status(410).json({ status: false, msg: e.message })
+    }
+
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+const sendBulkMessage = async (req, res) => {
+    const { numbers, messages, type } = req.body;
+    
+    if (!Array.isArray(numbers) || numbers.length === 0) {
+        return res.status(400).json({ status: false, msg: 'Invalid numbers array' });
+    }
+    
+    if (!Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ status: false, msg: 'Invalid messages array' });
+    }
+
+    const activeSessions = Array.from(sessions.keys());
+    
+    if (activeSessions.length === 0) {
+        return res.status(500).json({ status: false, msg: 'No active sessions available' });
+    }
+
+    // Return immediate response
+    res.json({ status: true, msg: 'Bulk process started in background' });
+
+    console.log(`Starting bulk blast to ${numbers.length} numbers using ${activeSessions.length} devices.`);
+
+    for (const number of numbers) {
+        // Randomly select a device
+        const randomDevice = activeSessions[Math.floor(Math.random() * activeSessions.length)];
+        const conn = sessions.get(randomDevice);
+
+        if (!conn) continue; // Skip if connection somehow lost
+
+        // Randomly select a message
+        const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+        
+        // Prepare message data
+        const messageData = {
+            message: randomMessage,
+            url: req.body.url // Optional for media
+        };
+
+        const msgContent = await getMessage(type || 'text', messageData);
+        const receipt = formatReceipt(number);
+
+        try {
             const check = await conn.onWhatsApp(receipt);
-            if (check.length === 0) return res.status(410).json({ status: false, msg: 'The Destination Number Is Not Registered On Whatsapp' });
-            await conn.sendMessage(receipt, msg).then(() => {
-
-                res.status(200).json({ status: true, msg: 'Message Sent!' })
-            }).catch((e) => {
-
-                res.status(410).json({ status: false, msg: e.message })
-            })
-            conn.end();
-            setTimeout(async () => {
-
-                await startCon(req.body.sender)
-                return;
-            }, 5000);
-
+            if (check.length > 0) {
+                await conn.sendMessage(receipt, msgContent);
+                logMessage(randomDevice, receipt, JSON.stringify(msgContent), 'success');
+                console.log(`Sent to ${number} via ${randomDevice}`);
+            } else {
+                 logMessage(randomDevice, receipt, JSON.stringify(msgContent), 'failed: not registered');
+                 console.log(`Failed ${number} not registered`);
+            }
+        } catch (e) {
+            logMessage(randomDevice, receipt, JSON.stringify(msgContent), 'failed: ' + e.message);
+            console.error(`Error sending to ${number}:`, e.message);
         }
 
-    })
-
+        // Random delay between 1-5 seconds to avoid block
+        const delay = Math.floor(Math.random() * 4000) + 1000;
+        await sleep(delay);
+    }
+    
+    console.log('Bulk blast finished.');
 }
 
 async function asyncForEach(array, callback) {
@@ -118,4 +180,4 @@ function formatReceipt(receipt) {
 
 }
 
-module.exports = { sendMessage }
+module.exports = { sendMessage, sendBulkMessage }

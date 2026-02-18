@@ -1,50 +1,68 @@
 const P = require('pino')
-const axios = require('axios');
 const {
   default: makeWASocket,
   DisconnectReason,
   useMultiFileAuthState,
+  fetchLatestBaileysVersion
 } = require("@whiskeysockets/baileys");
 const fs = require('fs');
 const qrcode = require('qrcode');
 
+const sessions = new Map();
+
 const startCon = async (device, socket = undefined, logout = undefined) => {
 
     const { state, saveCreds } = await useMultiFileAuthState(`./session-${device}.json`)
+    
+    // Fetch latest version of WA Web
+    const { version, isLatest } = await fetchLatestBaileysVersion()
+    console.log(`using WA v${version.join('.')}, isLatest: ${isLatest}`)
+    
     const sock = makeWASocket({
         auth: state,
-        version: [2, 2206, 9],
+        version: version,
         logger: P({ level: 'silent' }),
         printQRInTerminal: false,
-        browser: ['mLITE', "Desktop", '10.0']
-
+        browser: ['Ubuntu', 'Chrome', '20.0.04'], 
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 10000,
+        syncFullHistory: false
     })
 
 
     sock.ev.on("connection.update", async (update) => {
         const { qr, connection, lastDisconnect } = update
         if (connection === 'close') {
-            if ((lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut) {
-                if ((lastDisconnect.error)?.output?.message === 'Restart Required') {
-                    startCon(device)
-                }
-                // console.log((lastDisconnect.error))
-                socket !== undefined ? socket.emit('Proccess') : ''
-            } else if ((lastDisconnect.error)?.output?.statusCode === 401) {
-
-                socket.emit('Unauthorized');
+            const statusCode = (lastDisconnect.error)?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            
+            console.log('connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect)
+            
+            if (shouldReconnect) {
+                // Reconnect dengan delay
+                setTimeout(() => {
+                    startCon(device, socket)
+                }, 3000)
+            } else if (statusCode === DisconnectReason.loggedOut) {
+                if (socket) socket.emit('Unauthorized');
                 if (fs.existsSync(`./session-${device}.json`)) {
                     fs.rmSync(`./session-${device}.json`, { recursive: true });
-                    fs.rmSync(`./number.txt`, { recursive: true });
-                    socket.emit("message", "logout device " + device);
+                    sessions.delete(device);
+                    if (socket) socket.emit("message", "logout device " + device);
                 }
             }
+            if (socket) socket.emit('Proccess')
+            
         } else if (connection === 'open') {
 
             socket !== undefined ? socket.emit('Authenticated', sock.user) : ''
             if (logout) {
                 sock.logout().then(() => {
-                    socket.emit('Pro`ccess')
+                    sessions.delete(device);
+                    if (fs.existsSync(`./session-${device}.json`)) {
+                        fs.rmSync(`./session-${device}.json`, { recursive: true });
+                    }
+                    socket.emit('Proccess')
                 })
                 return
             }
@@ -58,6 +76,9 @@ const startCon = async (device, socket = undefined, logout = undefined) => {
         }
     })
     sock.ev.on('creds.update', saveCreds)
+    
+    sessions.set(device, sock);
+    
     return {
         conn: sock,
         state: state
@@ -65,20 +86,21 @@ const startCon = async (device, socket = undefined, logout = undefined) => {
 
 }
 
-// init
-setInterval(async () => {
-    fs.readFile('./number.txt', 'utf8', (err, data) => {
-      if (err) {
-        console.error(err);
-        return;
-      } else {
-        var data = data.split('\n').shift();
-        if (fs.existsSync(`./session-${data}.json/creds.json`)) {
-            startCon(data);
-            console.log(`Success initialize ${data} Device`);
+const init = async () => {
+    const files = fs.readdirSync('./');
+    files.forEach(file => {
+        if (file.startsWith('session-') && file.endsWith('.json')) {
+            const device = file.replace('session-', '').replace('.json', '');
+            if (fs.existsSync(`./session-${device}.json/creds.json`)) {
+                startCon(device);
+                console.log(`Success initialize ${device} Device`);
+            }
         }
-      }
     });
-}, 50000);
+}
 
-module.exports = { startCon: startCon }
+const getSession = (device) => {
+    return sessions.get(device);
+}
+
+module.exports = { startCon, init, getSession, sessions }

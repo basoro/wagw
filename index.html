@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Gateway Multi-Device</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input { padding: 8px; width: 100%; box-sizing: border-box; }
+        button { padding: 10px 15px; background-color: #28a745; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #218838; }
+        #qr-container { margin-top: 20px; text-align: center; }
+        #status { margin-top: 10px; font-weight: bold; }
+        img { max-width: 300px; border: 1px solid #ddd; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .status-connected { color: green; font-weight: bold; }
+        .status-disconnected { color: red; font-weight: bold; }
+        .delete-btn { background-color: #dc3545; padding: 5px 10px; font-size: 12px; }
+        .delete-btn:hover { background-color: #c82333; }
+        .docs-link { display: inline-block; margin-top: 10px; padding: 10px 15px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 4px; }
+        .docs-link:hover { background-color: #138496; }
+    </style>
+</head>
+<body>
+    <h1>WhatsApp Gateway Manager</h1>
+    
+    <div class="container">
+        <h2>Add New Device</h2>
+        <div class="input-group">
+            <label for="device-id">Device ID (e.g., my-phone, support-1):</label>
+            <input type="text" id="device-id" placeholder="Enter unique device ID">
+        </div>
+        <button onclick="startConnection()">Generate QR Code</button>
+        <button onclick="logoutDevice()" style="background-color: #dc3545;">Logout Device</button>
+        
+        <div id="status"></div>
+        <div id="qr-container"></div>
+    </div>
+
+    <div class="container">
+        <h2>Registered Devices</h2>
+        <div class="input-group">
+            <input type="password" id="api-key-list" placeholder="Enter API Key to view list">
+            <button onclick="fetchDevices()" style="margin-top:5px; background-color: #007bff;">Refresh List</button>
+        </div>
+        <table id="device-table">
+            <thead>
+                <tr>
+                    <th>Device ID</th>
+                    <th>Status</th>
+                    <th>Phone Number</th>
+                    <th>Name</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="5" style="text-align:center;">Enter API Key and click Refresh List</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="container">
+        <h3>How to use:</h3>
+        <ol>
+            <li>Enter a unique Device ID above.</li>
+            <li>Click "Generate QR Code".</li>
+            <li>Open WhatsApp on your phone.</li>
+            <li>Go to Linked Devices > Link a Device.</li>
+            <li>Scan the QR code that appears below.</li>
+        </ol>
+        <p>
+            <a href="/logs-view" class="docs-link" style="background-color: #6c757d;">View Message Logs</a>
+            <a href="/docs" class="docs-link">Read Documentation</a>
+        </p>
+    </div>
+
+    <script>
+        const socket = io();
+        const qrContainer = document.getElementById('qr-container');
+        const statusDiv = document.getElementById('status');
+        const deviceInput = document.getElementById('device-id');
+
+        socket.on('QrGenerated', (url) => {
+            qrContainer.innerHTML = `<img src="${url}" alt="Scan this QR Code">`;
+            statusDiv.innerText = 'Please scan the QR Code with your WhatsApp app.';
+            statusDiv.style.color = 'blue';
+        });
+
+        socket.on('Authenticated', (user) => {
+            qrContainer.innerHTML = '';
+            statusDiv.innerText = `Device Authenticated! Logged in as: ${user.name || user.id}`;
+            statusDiv.style.color = 'green';
+            fetchDevices(); // Refresh list after auth
+        });
+
+        socket.on('Proccess', () => {
+             statusDiv.innerText = 'Processing... / Device Logged Out';
+             statusDiv.style.color = 'orange';
+             qrContainer.innerHTML = '';
+             setTimeout(fetchDevices, 2000); // Refresh list after logout
+        });
+
+        socket.on('Unauthorized', () => {
+            statusDiv.innerText = 'Unauthorized / Session Invalid';
+            statusDiv.style.color = 'red';
+        });
+        
+        socket.on('message', (msg) => {
+            console.log(msg);
+            alert(msg);
+        });
+
+        function startConnection() {
+            const deviceId = deviceInput.value.trim();
+            if (!deviceId) {
+                alert('Please enter a Device ID');
+                return;
+            }
+            statusDiv.innerText = 'Initializing connection...';
+            socket.emit('StartConnection', deviceId);
+        }
+
+        function logoutDevice() {
+            const deviceId = deviceInput.value.trim();
+            if (!deviceId) {
+                alert('Please enter a Device ID to logout');
+                return;
+            }
+            if(confirm('Are you sure you want to logout this device?')) {
+                socket.emit('LogoutDevice', deviceId);
+            }
+        }
+
+        async function fetchDevices() {
+            const apiKey = document.getElementById('api-key-list').value.trim();
+            if (!apiKey) {
+                alert('Please enter API Key to view device list');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/wagateway/devices?api_key=${apiKey}`);
+                const result = await response.json();
+                
+                const tbody = document.querySelector('#device-table tbody');
+                tbody.innerHTML = '';
+
+                if (result.status && result.data.length > 0) {
+                    result.data.forEach(device => {
+                        const row = document.createElement('tr');
+                        const statusClass = device.status === 'connected' ? 'status-connected' : 'status-disconnected';
+                        row.innerHTML = `
+                            <td>${device.device_id}</td>
+                            <td class="${statusClass}">${device.status.toUpperCase()}</td>
+                            <td>${device.phone || '-'}</td>
+                            <td>${device.name || '-'}</td>
+                            <td>
+                                <button class="delete-btn" onclick="deleteDevice('${device.device_id}')">Delete</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                } else {
+                     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No registered devices found</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error fetching devices:', error);
+            }
+        }
+
+        async function deleteDevice(deviceId) {
+            const apiKey = document.getElementById('api-key-list').value.trim();
+            if (!apiKey) {
+                alert('Please enter API Key to delete device');
+                return;
+            }
+
+            if(!confirm(`Are you sure you want to delete device ${deviceId}? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/wagateway/delete-device', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey
+                    },
+                    body: JSON.stringify({ device_id: deviceId })
+                });
+
+                const result = await response.json();
+                if (result.status) {
+                    alert(result.msg);
+                    fetchDevices(); // Refresh list
+                } else {
+                    alert('Failed to delete: ' + result.msg);
+                }
+            } catch (error) {
+                console.error('Error deleting device:', error);
+                alert('Error deleting device');
+            }
+        }
+    </script>
+</body>
+</html>

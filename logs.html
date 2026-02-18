@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Gateway Logs</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .success { color: green; font-weight: bold; }
+        .failed { color: red; font-weight: bold; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; }
+        .input-group { margin: 20px auto; text-align: center; }
+        .input-group input { padding: 8px; width: 300px; border: 1px solid #ccc; border-radius: 4px; }
+        .refresh-btn { padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; }
+        .refresh-btn:hover { background-color: #0056b3; }
+        .error-msg { color: red; text-align: center; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Message Logs</h1>
+        
+        <div class="input-group">
+            <input type="password" id="api-key" placeholder="Enter API Key to view logs" />
+            <button class="refresh-btn" onclick="fetchLogs()">View Logs</button>
+        </div>
+        <p id="error-msg" class="error-msg"></p>
+
+        <table id="logs-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Timestamp</th>
+                    <th>Sender</th>
+                    <th>Recipient</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Logs will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function fetchLogs() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            const errorMsg = document.getElementById('error-msg');
+            
+            if (!apiKey) {
+                errorMsg.textContent = 'Please enter API Key';
+                errorMsg.style.display = 'block';
+                return;
+            }
+            
+            errorMsg.style.display = 'none';
+
+            try {
+                const response = await fetch(`/wagateway/logs?api_key=${apiKey}`);
+                const result = await response.json();
+                
+                if (result.status) {
+                    const tbody = document.querySelector('#logs-table tbody');
+                    tbody.innerHTML = '';
+                    
+                    if (result.data.length === 0) {
+                         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">No logs found</td></tr>';
+                         return;
+                    }
+
+                    result.data.forEach(log => {
+                        const row = document.createElement('tr');
+                        const statusClass = log.status === 'success' ? 'success' : 'failed';
+                        
+                        // Parse message if it's JSON
+                        let messageDisplay = log.message;
+                        try {
+                            const msgObj = JSON.parse(log.message);
+                            if (msgObj.text) messageDisplay = msgObj.text;
+                            else if (msgObj.image) messageDisplay = '[Image] ' + (msgObj.caption || '');
+                            else if (msgObj.document) messageDisplay = '[Document] ' + (msgObj.fileName || '');
+                        } catch (e) {
+                            // Not JSON, keep as is
+                        }
+
+                        row.innerHTML = `
+                            <td>${log.id}</td>
+                            <td>${new Date(log.timestamp).toLocaleString()}</td>
+                            <td>${log.sender}</td>
+                            <td>${log.recipient}</td>
+                            <td>${messageDisplay}</td>
+                            <td class="${statusClass}">${log.status}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                } else {
+                    errorMsg.textContent = 'Error: ' + result.msg;
+                    errorMsg.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+                errorMsg.textContent = 'Failed to fetch logs';
+                errorMsg.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
