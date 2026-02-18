@@ -15,6 +15,7 @@ Project ini adalah WhatsApp Gateway API berbasis Node.js menggunakan library `@w
 *   **Web Interface**:
     *   Halaman Login/Scan QR & Manajemen Perangkat: `/`
     *   Halaman Log Pesan: `/logs-view`
+    *   Halaman Dokumentasi: `/docs`
 
 ## Instalasi
 
