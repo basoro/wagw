@@ -104,6 +104,7 @@ Content-Type: application/json
 
 ### 3. Mengirim Pesan Massal (Blast)
 Fitur ini akan mengirim pesan ke banyak nomor dengan menggunakan **semua device yang terhubung secara acak**.
+Mendukung pesan dinamis (personalisasi) berdasarkan data penerima.
 
 **Endpoint**: `POST /wagateway/blast`
 
@@ -116,20 +117,20 @@ Content-Type: application/json
 **Body (JSON)**:
 ```json
 {
-    "numbers": [
-        "6281234567890",
-        "6289876543210",
-        "08123456789"
-    ],
-    "messages": [
-        "Halo, ini pesan variasi A",
-        "Hi, apa kabar? ini variasi B",
-        "Selamat siang, penawaran khusus C"
-    ],
-    "type": "text" 
+  "receiver": [
+    { "number": "6281234567890", "nama": "Fatimah", "tanggal": "2023-08-01", "poli": "Umum" },
+    { "number": "6281234567891", "nama": "Joko", "tanggal": "2023-08-02", "poli": "Gigi" }
+  ],
+  "messages": [
+    "Halo {nama}, jadwal {poli} Anda pada tanggal {tanggal} sudah dikonfirmasi.",
+    "Hi {nama}, jangan lupa jadwal {poli} tanggal {tanggal} ya!"
+  ],
+  "type": "text"
 }
 ```
-*Catatan: `type` bisa diisi `text`, `image`, atau `document` (jika image/document, tambahkan parameter `url`).*
+*   `receiver`: Array objek penerima. Wajib ada key `number`. Key lain (seperti `nama`, `poli`, dll) bisa digunakan sebagai variabel di dalam pesan.
+*   `messages`: Array variasi pesan. Sistem akan memilih satu secara acak. Gunakan `{key}` untuk menyisipkan data penerima.
+*   `type`: `text`, `image`, atau `document`. Jika media, tambahkan properti `"url": "..."` di level utama JSON.
 
 ### 4. Melihat Log Pesan
 Akses `http://localhost:10000/logs-view` untuk melihat riwayat pesan.

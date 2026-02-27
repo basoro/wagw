@@ -50,10 +50,10 @@ const sendMessage = async (req, res) => {
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const sendBulkMessage = async (req, res) => {
-    const { numbers, messages, type } = req.body;
+    const { receiver, messages, type } = req.body;
     
-    if (!Array.isArray(numbers) || numbers.length === 0) {
-        return res.status(400).json({ status: false, msg: 'Invalid numbers array' });
+    if (!Array.isArray(receiver) || receiver.length === 0) {
+        return res.status(400).json({ status: false, msg: 'Invalid receiver array' });
     }
     
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -69,9 +69,9 @@ const sendBulkMessage = async (req, res) => {
     // Return immediate response
     res.json({ status: true, msg: 'Bulk process started in background' });
 
-    console.log(`Starting bulk blast to ${numbers.length} numbers using ${activeSessions.length} devices.`);
+    console.log(`Starting bulk blast to ${receiver.length} numbers using ${activeSessions.length} devices.`);
 
-    for (const number of numbers) {
+    for (const item of receiver) {
         // Randomly select a device
         const randomDevice = activeSessions[Math.floor(Math.random() * activeSessions.length)];
         const conn = sessions.get(randomDevice);
@@ -79,7 +79,16 @@ const sendBulkMessage = async (req, res) => {
         if (!conn) continue; // Skip if connection somehow lost
 
         // Randomly select a message
-        const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+        let randomMessage = messages[Math.floor(Math.random() * messages.length)];
+        
+        // Replace placeholders with receiver data
+        // Support any key present in the receiver object (e.g., {nama}, {tanggal}, {poli})
+        Object.keys(item).forEach(key => {
+            if (key !== 'number') { // Skip replacing number itself
+                const regex = new RegExp(`{${key}}`, 'g');
+                randomMessage = randomMessage.replace(regex, item[key]);
+            }
+        });
         
         // Prepare message data
         const messageData = {
@@ -88,21 +97,21 @@ const sendBulkMessage = async (req, res) => {
         };
 
         const msgContent = await getMessage(type || 'text', messageData);
-        const receipt = formatReceipt(number);
+        const receipt = formatReceipt(item.number);
 
         try {
             const check = await conn.onWhatsApp(receipt);
             if (check.length > 0) {
                 await conn.sendMessage(receipt, msgContent);
                 logMessage(randomDevice, receipt, JSON.stringify(msgContent), 'success');
-                console.log(`Sent to ${number} via ${randomDevice}`);
+                console.log(`Sent to ${item.number} via ${randomDevice}`);
             } else {
                  logMessage(randomDevice, receipt, JSON.stringify(msgContent), 'failed: not registered');
-                 console.log(`Failed ${number} not registered`);
+                 console.log(`Failed ${item.number} not registered`);
             }
         } catch (e) {
             logMessage(randomDevice, receipt, JSON.stringify(msgContent), 'failed: ' + e.message);
-            console.error(`Error sending to ${number}:`, e.message);
+            console.error(`Error sending to ${item.number}:`, e.message);
         }
 
         // Random delay between 1-5 seconds to avoid block

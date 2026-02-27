@@ -160,17 +160,28 @@ module.exports = function (router) {
      *           schema:
      *             type: object
      *             required:
-     *               - numbers
+     *               - receiver
      *               - messages
      *             properties:
-     *               numbers:
+     *               receiver:
      *                 type: array
      *                 items:
-     *                   type: string
+     *                   type: object
+     *                   properties:
+     *                     number:
+     *                       type: string
+     *                       example: "6281234567890"
+     *                     nama:
+     *                       type: string
+     *                       example: "Fatimah"
+     *                     other_key:
+     *                       type: string
+     *                       description: "Any other key to be replaced in message"
      *               messages:
      *                 type: array
      *                 items:
      *                   type: string
+     *                   example: "Halo {nama}, pesan ini untuk Anda."
      *               type:
      *                 type: string
      *                 enum: [text, image, document]
@@ -183,7 +194,7 @@ module.exports = function (router) {
      *         description: Bulk process started
      */
     router.post('/wagateway/blast', [
-        body('numbers', 'Wrong Parameters!').isArray(),
+        body('receiver', 'Wrong Parameters!').isArray(),
         body('messages', 'Wrong Parameters!').isArray(),
     ], sendBulkMessage)
 
