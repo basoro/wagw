@@ -12,6 +12,7 @@ Project ini adalah WhatsApp Gateway API berbasis Node.js menggunakan library `@w
 *   **Random Message Variation**: Mendukung variasi pesan acak (spintax like) untuk setiap penerima.
 *   **Message Logging**: Menyimpan riwayat pesan (sukses/gagal) ke database SQLite.
 *   **Secure API Key**: Endpoint API dilindungi menggunakan API Key.
+*   **Auto-Reply via Webhook**: Balas pesan masuk secara otomatis menggunakan server webhook eksternal.
 *   **Web Interface**:
     *   Halaman Login/Scan QR & Manajemen Perangkat: `/`
     *   Halaman Log Pesan: `/logs-view`
@@ -61,9 +62,9 @@ Konfigurasi server dilakukan melalui file `.env`.
 | :--- | :--- | :--- |
 | `PORT` | `10000` | Port aplikasi berjalan |
 | `DEFAULT_API_KEY` | `wagw-secret-key` | API Key default yang dibuat saat inisialisasi database |
-| `AUTO_REPLY_WEBHOOK_URL` | `` (kosong/nonaktif) | URL webhook untuk generate auto-reply dari pesan masuk |
-| `AUTO_REPLY_TIMEOUT_MS` | `10000` | Timeout request webhook auto-reply (ms) |
-| `AUTO_REPLY_FALLBACK_MESSAGE` | `` (kosong) | Pesan fallback saat webhook gagal/tidak mengembalikan reply |
+| `AUTO_REPLY_WEBHOOK_URL` | *(kosong)* | URL webhook yang dipanggil WAGW setiap ada pesan masuk. Jika kosong, auto-reply dinonaktifkan. |
+| `AUTO_REPLY_TIMEOUT_MS` | `10000` | Timeout (ms) menunggu respons dari webhook. |
+| `AUTO_REPLY_FALLBACK_MESSAGE` | *(kosong)* | Pesan yang dikirim jika webhook gagal/timeout. Kosong = tidak ada balasan. |
 
 ## Keamanan API (API Key)
 
@@ -139,61 +140,104 @@ Content-Type: application/json
 Akses `http://localhost:10000/logs-view` untuk melihat riwayat pesan.
 Anda akan diminta memasukkan **API Key** untuk melihat data log demi keamanan.
 
-### 5. Auto Reply via Webhook
-Fitur ini akan otomatis membalas **chat personal masuk** (bukan grup/broadcast) dari device yang aktif.
+## Auto-Reply via Webhook
 
-Set `.env`:
-```env
-AUTO_REPLY_WEBHOOK_URL=https://example.com/webhook/auto-reply
-AUTO_REPLY_TIMEOUT_MS=10000
-AUTO_REPLY_FALLBACK_MESSAGE=
+WAGW mendukung auto-reply otomatis untuk pesan **personal** (1-on-1) yang masuk. Setiap kali ada pesan masuk, WAGW akan melakukan POST ke URL webhook yang Anda tentukan, lalu mengirimkan teks balasan yang dikembalikan oleh webhook tersebut.
+
+### Cara Kerja
+
+```
+Pesan masuk dari WA
+        │
+        ▼
+WAGW POST payload → Webhook URL Anda
+        │
+        ▼
+Webhook memproses & mengembalikan JSON {"reply": "..."}
+        │
+        ▼
+WAGW mengirim balasan ke pengirim
 ```
 
-Payload yang dikirim ke webhook (JSON):
+### Konfigurasi `.env`
+
+```env
+AUTO_REPLY_WEBHOOK_URL=https://yourdomain.com/webhook.php
+AUTO_REPLY_TIMEOUT_MS=10000
+AUTO_REPLY_FALLBACK_MESSAGE=Maaf, sistem kami sedang gangguan. Mohon tunggu sebentar.
+```
+
+### Payload yang Dikirim WAGW ke Webhook
+
+WAGW melakukan `POST` dengan `Content-Type: application/json`:
+
 ```json
 {
-  "device_id": "admin1",
-  "from": "6281234567890@s.whatsapp.net",
-  "to": "6281234567890@s.whatsapp.net",
-  "push_name": "Nama Pengirim",
-  "message": "Halo",
-  "timestamp": 1713700000
+  "device_id":  "admin1",
+  "from":       "6281234567890@s.whatsapp.net",
+  "to":         "6281234567890@s.whatsapp.net",
+  "push_name":  "Nama Pengirim",
+  "message":    "Halo",
+  "timestamp":  1713700000
 }
 ```
 
-Webhook harus mengembalikan salah satu format berikut agar dibalas:
-```json
-{ "reply": "Halo, ada yang bisa dibantu?" }
+| Field | Tipe | Keterangan |
+| :--- | :--- | :--- |
+| `device_id` | string | ID device WAGW yang menerima pesan |
+| `from` | string | JID (nomor) pengirim pesan |
+| `to` | string | JID tujuan (nomor device Anda) |
+| `push_name` | string | Nama tampilan pengirim di WhatsApp |
+| `message` | string | Isi teks pesan yang diterima |
+| `timestamp` | number | Unix timestamp pesan |
+
+### Format Response Webhook
+
+Webhook Anda harus mengembalikan JSON. WAGW membaca field berikut (diprioritaskan berurutan):
+
+| Response | Perilaku WAGW |
+| :--- | :--- |
+| `{"reply": "teks balasan"}` | ✅ Mengirim balasan |
+| `{"message": "teks balasan"}` | ✅ Mengirim balasan |
+| `{"text": "teks balasan"}` | ✅ Mengirim balasan |
+| `{}` / kosong / `null` | ⛔ Tidak ada balasan |
+
+> **Catatan**: Auto-reply hanya aktif untuk chat **personal** (1-on-1). Pesan dari grup, broadcast, dan status diabaikan.
+
+### Contoh Webhook PHP
+
+File contoh tersedia di [`examples/webhook.php`](examples/webhook.php). Fitur yang ada:
+- Balas berdasarkan **kata kunci** (halo, jam buka, harga, lokasi, dll.)
+- Menampilkan **menu bantuan** jika pengguna mengetik "bantuan" atau "menu"
+- Mengembalikan `{}` (tanpa balasan) jika tidak ada kata kunci yang cocok
+
+Salin file tersebut ke server PHP Anda, lalu atur `AUTO_REPLY_WEBHOOK_URL` di `.env` WAGW:
+
+```env
+AUTO_REPLY_WEBHOOK_URL=https://yourdomain.com/webhook.php
 ```
-atau:
-```json
-{ "message": "Halo, ada yang bisa dibantu?" }
-```
-atau plain text response.
 
-### 6. Enable/Disable Auto Reply per Device
+### Mengelola Auto-Reply Per-Device (API)
 
-Auto reply dapat diaktifkan atau dinonaktifkan secara individual per device melalui API.
+Gunakan endpoint berikut untuk mengaktifkan/menonaktifkan auto-reply pada device tertentu tanpa restart server:
 
-**Enable Auto Reply:**
+**Aktifkan auto-reply:**
+```http
+POST /wagateway/auto-reply/enable
+x-api-key: wagw-secret-key
+Content-Type: application/json
 
-`POST /wagateway/auto-reply/enable`
-
-```json
-{ "device_id": "admin1" }
+{"device_id": "admin1"}
 ```
 
-**Disable Auto Reply:**
+**Nonaktifkan auto-reply:**
+```http
+POST /wagateway/auto-reply/disable
+x-api-key: wagw-secret-key
+Content-Type: application/json
 
-`POST /wagateway/auto-reply/disable`
-
-```json
-{ "device_id": "admin1" }
+{"device_id": "admin1"}
 ```
-
-Status auto reply masing-masing device juga ditampilkan di response endpoint `GET /wagateway/devices` pada field `auto_reply`.
-
-**Catatan**: State enable/disable disimpan di memori — setelah server restart, semua device kembali ke default (aktif jika `AUTO_REPLY_WEBHOOK_URL` dikonfigurasi, tidak aktif jika tidak).
 
 ## Struktur Database (SQLite)
 File database: `wagw.db`
