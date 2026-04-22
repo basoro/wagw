@@ -2,9 +2,34 @@ const axios = require('axios');
 require('dotenv').config();
 
 const AUTO_REPLY_WEBHOOK_URL = process.env.AUTO_REPLY_WEBHOOK_URL || '';
-const configuredTimeout = Number.parseInt(process.env.AUTO_REPLY_TIMEOUT_MS || '10000', 10);
-const AUTO_REPLY_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : 10000;
+const DEFAULT_TIMEOUT_MS = 10000;
+const configuredTimeoutMs = Number.parseInt(process.env.AUTO_REPLY_TIMEOUT_MS || String(DEFAULT_TIMEOUT_MS), 10);
+const AUTO_REPLY_TIMEOUT_MS = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0 ? configuredTimeoutMs : DEFAULT_TIMEOUT_MS;
 const AUTO_REPLY_FALLBACK_MESSAGE = process.env.AUTO_REPLY_FALLBACK_MESSAGE || '';
+
+// Per-device auto-reply state.
+// Devices are enabled by default when a webhook URL is configured.
+// An explicit disable call adds the device to this set.
+const disabledDevices = new Set();
+// Track devices that have been explicitly enabled (overrides default-off when no webhook URL).
+const enabledDevices = new Set();
+
+const isAutoReplyEnabled = (device) => {
+    if (disabledDevices.has(device)) return false;
+    if (enabledDevices.has(device)) return true;
+    // Default: enabled only when a global webhook URL is set
+    return Boolean(AUTO_REPLY_WEBHOOK_URL);
+};
+
+const enableAutoReply = (device) => {
+    enabledDevices.add(device);
+    disabledDevices.delete(device);
+};
+
+const disableAutoReply = (device) => {
+    disabledDevices.add(device);
+    enabledDevices.delete(device);
+};
 
 const unwrapMessage = (msg = {}) => {
     let content = msg.message;
@@ -48,6 +73,8 @@ const isIncomingChatMessage = (msg = {}) => {
     if (msg?.key?.fromMe) return false;
     if (remoteJid === 'status@broadcast') return false;
     if (remoteJid.endsWith('@broadcast')) return false;
+    // Auto-reply is intentionally limited to personal (1-on-1) chats.
+    // Group chats are excluded to avoid flooding group conversations with bot replies.
     if (remoteJid.endsWith('@g.us')) return false;
     return true;
 };
@@ -67,6 +94,15 @@ const requestAutoReply = async (payload) => {
         return AUTO_REPLY_FALLBACK_MESSAGE || '';
     }
 
+    // Redact credentials from URL before logging
+    let safeUrl = AUTO_REPLY_WEBHOOK_URL;
+    try {
+        const parsed = new URL(AUTO_REPLY_WEBHOOK_URL);
+        parsed.username = parsed.username ? '***' : '';
+        parsed.password = parsed.password ? '***' : '';
+        safeUrl = parsed.toString();
+    } catch (_) { /* not a valid URL, use as-is */ }
+
     try {
         const response = await axios.post(AUTO_REPLY_WEBHOOK_URL, payload, {
             timeout: AUTO_REPLY_TIMEOUT_MS
@@ -74,7 +110,10 @@ const requestAutoReply = async (payload) => {
         const autoReply = normalizeReply(response.data);
         return autoReply || AUTO_REPLY_FALLBACK_MESSAGE || '';
     } catch (error) {
-        console.log(`Auto reply webhook error [${AUTO_REPLY_WEBHOOK_URL}]:`, error.stack || error.message);
+        const errorDetail = error.code
+            ? `network error: ${error.code}`
+            : `HTTP ${error.response?.status || 'unknown'}`;
+        console.log(`Auto-reply webhook request failed [${safeUrl}] (${errorDetail}):`, error.stack || error.message);
         return AUTO_REPLY_FALLBACK_MESSAGE || '';
     }
 };
@@ -82,5 +121,8 @@ const requestAutoReply = async (payload) => {
 module.exports = {
     extractIncomingText,
     isIncomingChatMessage,
-    requestAutoReply
+    requestAutoReply,
+    isAutoReplyEnabled,
+    enableAutoReply,
+    disableAutoReply
 };

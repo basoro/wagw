@@ -7,7 +7,7 @@ const {
 } = require("@whiskeysockets/baileys");
 const fs = require('fs');
 const qrcode = require('qrcode');
-const { extractIncomingText, isIncomingChatMessage, requestAutoReply } = require('./auto-reply');
+const { extractIncomingText, isIncomingChatMessage, requestAutoReply, isAutoReplyEnabled } = require('./auto-reply');
 
 const sessions = new Map();
 
@@ -81,6 +81,7 @@ const startCon = async (device, socket = undefined, logout = undefined) => {
 
         for (const msg of messages) {
             if (!isIncomingChatMessage(msg)) continue;
+            if (!isAutoReplyEnabled(device)) continue;
 
             const incomingText = extractIncomingText(msg);
             if (!incomingText) continue;
@@ -101,7 +102,7 @@ const startCon = async (device, socket = undefined, logout = undefined) => {
             try {
                 await sock.sendMessage(remoteJid, { text: autoReply }, { quoted: msg });
             } catch (error) {
-                console.log(`Auto reply failed for device ${device}, recipient ${remoteJid}:`, error.stack || error.message);
+                console.log(`Failed to send auto-reply for device ${device} to recipient ${remoteJid}:`, error.stack || error.message);
             }
         }
     });

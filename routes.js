@@ -2,8 +2,28 @@
 const { sendMessage, sendBulkMessage } = require('./message')
 const { getLogs, validateApiKey } = require('./database')
 const { sessions, startCon } = require('./connection')
-const { body } = require('express-validator')
+const { enableAutoReply, disableAutoReply, isAutoReplyEnabled } = require('./auto-reply')
+const { body, validationResult } = require('express-validator')
 const fs = require('fs');
+
+// Only allow safe device IDs: alphanumeric, hyphen, and underscore
+const DEVICE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+const validateDeviceId = body('device_id', 'Wrong Parameters!')
+    .notEmpty()
+    .matches(DEVICE_ID_PATTERN).withMessage('device_id contains invalid characters');
+
+const deviceExists = (device_id) => {
+    const conn = sessions.get(device_id);
+    if (conn) return true;
+    // Compare against directory listing to avoid constructing file paths from user input
+    const expectedFilename = `session-${device_id}.json`;
+    try {
+        return fs.readdirSync(__dirname).includes(expectedFilename);
+    } catch (_) {
+        return false;
+    }
+};
 
 const authenticate = async (req, res, next) => {
     const apiKey = req.headers['x-api-key'] || req.query.api_key;
@@ -249,7 +269,8 @@ module.exports = function (router) {
                 device_id: device,
                 status: isConnected ? 'connected' : 'disconnected',
                 phone: isConnected ? conn.user.id.split(':')[0] : null,
-                name: isConnected ? conn.user.name : null
+                name: isConnected ? conn.user.name : null,
+                auto_reply: isAutoReplyEnabled(device)
             });
         });
 
@@ -318,6 +339,82 @@ module.exports = function (router) {
             }
         }
 
+    });
+
+    /**
+     * @swagger
+     * /wagateway/auto-reply/enable:
+     *   post:
+     *     summary: Enable auto-reply for a specific device
+     *     tags: [Auto Reply]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - device_id
+     *             properties:
+     *               device_id:
+     *                 type: string
+     *                 description: Device ID to enable auto-reply on
+     *     responses:
+     *       200:
+     *         description: Auto-reply enabled
+     *       404:
+     *         description: Device not found
+     */
+    // All /wagateway/* routes are protected by router.use('/wagateway/*', authenticate) above.
+    // authenticate is also listed explicitly here for consistency with the endpoint documentation.
+    router.post('/wagateway/auto-reply/enable', [authenticate, validateDeviceId], (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ status: false, msg: errors.array()[0].msg });
+        const { device_id } = req.body;
+        if (!deviceExists(device_id)) {
+            return res.status(404).json({ status: false, msg: `Device ${device_id} not found` });
+        }
+        enableAutoReply(device_id);
+        res.json({ status: true, msg: `Auto reply enabled for device ${device_id}` });
+    });
+
+    /**
+     * @swagger
+     * /wagateway/auto-reply/disable:
+     *   post:
+     *     summary: Disable auto-reply for a specific device
+     *     tags: [Auto Reply]
+     *     security:
+     *       - ApiKeyAuth: []
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required:
+     *               - device_id
+     *             properties:
+     *               device_id:
+     *                 type: string
+     *                 description: Device ID to disable auto-reply on
+     *     responses:
+     *       200:
+     *         description: Auto-reply disabled
+     *       404:
+     *         description: Device not found
+     */
+    router.post('/wagateway/auto-reply/disable', [authenticate, validateDeviceId], (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ status: false, msg: errors.array()[0].msg });
+        const { device_id } = req.body;
+        if (!deviceExists(device_id)) {
+            return res.status(404).json({ status: false, msg: `Device ${device_id} not found` });
+        }
+        disableAutoReply(device_id);
+        res.json({ status: true, msg: `Auto reply disabled for device ${device_id}` });
     });
 
 }

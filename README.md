@@ -171,6 +171,30 @@ atau:
 ```
 atau plain text response.
 
+### 6. Enable/Disable Auto Reply per Device
+
+Auto reply dapat diaktifkan atau dinonaktifkan secara individual per device melalui API.
+
+**Enable Auto Reply:**
+
+`POST /wagateway/auto-reply/enable`
+
+```json
+{ "device_id": "admin1" }
+```
+
+**Disable Auto Reply:**
+
+`POST /wagateway/auto-reply/disable`
+
+```json
+{ "device_id": "admin1" }
+```
+
+Status auto reply masing-masing device juga ditampilkan di response endpoint `GET /wagateway/devices` pada field `auto_reply`.
+
+**Catatan**: State enable/disable disimpan di memori — setelah server restart, semua device kembali ke default (aktif jika `AUTO_REPLY_WEBHOOK_URL` dikonfigurasi, tidak aktif jika tidak).
+
 ## Struktur Database (SQLite)
 File database: `wagw.db`
 
