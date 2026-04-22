@@ -101,7 +101,7 @@ const startCon = async (device, socket = undefined, logout = undefined) => {
             try {
                 await sock.sendMessage(remoteJid, { text: autoReply }, { quoted: msg });
             } catch (error) {
-                console.log(`Auto reply failed for ${remoteJid}:`, error.message);
+                console.log(`Auto reply failed for ${remoteJid}:`, error.stack || error.message);
             }
         }
     });

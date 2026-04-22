@@ -73,7 +73,7 @@ const requestAutoReply = async (payload) => {
         const autoReply = normalizeReply(response.data);
         return autoReply || AUTO_REPLY_FALLBACK_MESSAGE || '';
     } catch (error) {
-        console.log('Auto reply webhook error:', error.message);
+        console.log(`Auto reply webhook error [${AUTO_REPLY_WEBHOOK_URL}]:`, error.stack || error.message);
         return AUTO_REPLY_FALLBACK_MESSAGE || '';
     }
 };
