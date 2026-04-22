@@ -7,6 +7,7 @@ const {
 } = require("@whiskeysockets/baileys");
 const fs = require('fs');
 const qrcode = require('qrcode');
+const { extractIncomingText, isIncomingChatMessage, requestAutoReply } = require('./auto-reply');
 
 const sessions = new Map();
 
@@ -75,6 +76,35 @@ const startCon = async (device, socket = undefined, logout = undefined) => {
             })
         }
     })
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        if (!Array.isArray(messages) || messages.length === 0) return;
+
+        for (const msg of messages) {
+            if (!isIncomingChatMessage(msg)) continue;
+
+            const incomingText = extractIncomingText(msg);
+            if (!incomingText) continue;
+
+            const remoteJid = msg?.key?.remoteJid;
+            const senderJid = msg?.key?.participant || remoteJid;
+            const autoReply = await requestAutoReply({
+                device_id: device,
+                from: senderJid,
+                to: remoteJid,
+                push_name: msg?.pushName || '',
+                message: incomingText,
+                timestamp: msg?.messageTimestamp || Math.floor(Date.now() / 1000)
+            });
+
+            if (!autoReply) continue;
+
+            try {
+                await sock.sendMessage(remoteJid, { text: autoReply }, { quoted: msg });
+            } catch (error) {
+                console.log(`Auto reply failed for ${remoteJid}:`, error.message);
+            }
+        }
+    });
     sock.ev.on('creds.update', saveCreds)
     
     sessions.set(device, sock);

@@ -61,6 +61,9 @@ Konfigurasi server dilakukan melalui file `.env`.
 | :--- | :--- | :--- |
 | `PORT` | `10000` | Port aplikasi berjalan |
 | `DEFAULT_API_KEY` | `wagw-secret-key` | API Key default yang dibuat saat inisialisasi database |
+| `AUTO_REPLY_WEBHOOK_URL` | `` (kosong/nonaktif) | URL webhook untuk generate auto-reply dari pesan masuk |
+| `AUTO_REPLY_TIMEOUT_MS` | `10000` | Timeout request webhook auto-reply (ms) |
+| `AUTO_REPLY_FALLBACK_MESSAGE` | `` (kosong) | Pesan fallback saat webhook gagal/tidak mengembalikan reply |
 
 ## Keamanan API (API Key)
 
@@ -135,6 +138,38 @@ Content-Type: application/json
 ### 4. Melihat Log Pesan
 Akses `http://localhost:10000/logs-view` untuk melihat riwayat pesan.
 Anda akan diminta memasukkan **API Key** untuk melihat data log demi keamanan.
+
+### 5. Auto Reply via Webhook
+Fitur ini akan otomatis membalas **chat personal masuk** (bukan grup/broadcast) dari device yang aktif.
+
+Set `.env`:
+```env
+AUTO_REPLY_WEBHOOK_URL=https://example.com/webhook/auto-reply
+AUTO_REPLY_TIMEOUT_MS=10000
+AUTO_REPLY_FALLBACK_MESSAGE=
+```
+
+Payload yang dikirim ke webhook (JSON):
+```json
+{
+  "device_id": "admin1",
+  "from": "6281234567890@s.whatsapp.net",
+  "to": "6281234567890@s.whatsapp.net",
+  "push_name": "Nama Pengirim",
+  "message": "Halo",
+  "timestamp": 1713700000
+}
+```
+
+Webhook harus mengembalikan salah satu format berikut agar dibalas:
+```json
+{ "reply": "Halo, ada yang bisa dibantu?" }
+```
+atau:
+```json
+{ "message": "Halo, ada yang bisa dibantu?" }
+```
+atau plain text response.
 
 ## Struktur Database (SQLite)
 File database: `wagw.db`
