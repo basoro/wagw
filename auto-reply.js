@@ -2,7 +2,8 @@ const axios = require('axios');
 require('dotenv').config();
 
 const AUTO_REPLY_WEBHOOK_URL = process.env.AUTO_REPLY_WEBHOOK_URL || '';
-const AUTO_REPLY_TIMEOUT_MS = Number(process.env.AUTO_REPLY_TIMEOUT_MS || 10000);
+const configuredTimeout = Number.parseInt(process.env.AUTO_REPLY_TIMEOUT_MS || '10000', 10);
+const AUTO_REPLY_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : 10000;
 const AUTO_REPLY_FALLBACK_MESSAGE = process.env.AUTO_REPLY_FALLBACK_MESSAGE || '';
 
 const unwrapMessage = (msg = {}) => {
